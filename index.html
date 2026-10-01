@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Money Tracker</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ─── Loading ─── -->
+<div id="s-loading" class="spinner-page">
+  <div class="spinner"></div> Loading…
+</div>
+
+<!-- ─── Firebase Setup ─── -->
+<div id="s-setup" class="page-center" style="display:none">
+  <div class="auth-card" style="max-width:520px">
+    <div class="auth-logo">💰 Money Tracker</div>
+    <p class="auth-sub">One-time setup — free forever</p>
+    <div class="info-box">
+      <strong>Steps (takes ~3 minutes):</strong><br>
+      1. Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> → Create project<br>
+      2. Project settings → Add web app → copy the <code>firebaseConfig</code> object<br>
+      3. Build → <strong>Firestore Database</strong> → Create (start in <em>test mode</em>)<br>
+      4. Authentication → Sign-in method → enable <strong>Google</strong><br>
+      5. Paste your config below and click Connect
+    </div>
+    <div class="fg">
+      <label class="lbl">Firebase Config JSON</label>
+      <textarea id="fc-input" class="fc" rows="7" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'></textarea>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="initFirebase()">Connect &amp; Continue →</button>
+    <p id="setup-err" style="color:var(--danger);font-size:12px;margin-top:10px;display:none"></p>
+  </div>
+</div>
+
+<!-- ─── Auth ─── -->
+<div id="s-auth" class="page-center" style="display:none">
+  <div class="auth-card">
+    <div class="auth-logo">💰 Money Tracker</div>
+    <p class="auth-sub">Track wallets, expenses &amp; investments across devices</p>
+    <button class="google-btn" onclick="doGoogleSignIn()">
+      <svg width="18" height="18" viewBox="0 0 18 18">
+        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.909-2.259c-.806.54-1.837.86-3.047.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+        <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+        <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/>
+      </svg>
+      Continue with Google
+    </button>
+  </div>
+</div>
+
+<!-- ─── App ─── -->
+<div id="s-app" style="display:none">
+  <!-- Mobile top bar -->
+  <div class="mobile-topbar">
+    <div class="mobile-topbar-logo">💰 Money Tracker</div>
+    <button class="eye-btn" id="eye-mob" onclick="toggleHide()" title="Show/hide balances">👁️</button>
+  </div>
+
+  <div id="app">
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <div class="sidebar-logo" style="display:flex;align-items:center;justify-content:space-between">
+        <span>💰 Money Tracker</span>
+        <button class="eye-btn" id="eye-desk" onclick="toggleHide()" title="Show/hide balances">👁️</button>
+      </div>
+      <div class="sidebar-nav">
+        <div class="nav-item active" onclick="go('dashboard')"><span class="ni">🏠</span> Dashboard</div>
+        <div class="nav-item" onclick="go('wallets')"><span class="ni">💳</span> Wallets</div>
+        <div class="nav-item" onclick="go('transfers')"><span class="ni">🔄</span> Transfers</div>
+        <div class="nav-item" onclick="go('expenses')"><span class="ni">💸</span> Expenses</div>
+        <div class="nav-item" onclick="go('investments')"><span class="ni">📈</span> Investments</div>
+        <div class="nav-item" onclick="go('collections')"><span class="ni">🫙</span> Collections</div>
+        <div class="nav-item" onclick="go('debts')"><span class="ni">🤝</span> Debts &amp; Loans</div>
+        <div class="nav-item" onclick="go('budget')"><span class="ni">📊</span> Budget</div>
+      </div>
+      <div class="sidebar-user">
+        <div class="u-avatar" id="u-av">?</div>
+        <div class="u-name" id="u-nm">…</div>
+        <button class="sign-out" onclick="doSignOut()">Out</button>
+      </div>
+    </nav>
+
+    <!-- Main -->
+    <main class="main">
+
+      <!-- Dashboard -->
+      <div id="sc-dashboard" class="screen active">
+        <div class="ph">
+          <div>
+            <div class="ph-title" id="dash-greet">Good morning</div>
+            <div class="ph-sub">Your financial overview</div>
+          </div>
+        </div>
+        <div class="dash-stats" id="dash-stats"></div>
+        <div class="card cp" style="margin-bottom:22px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+            <div class="slbl" style="margin:0">Spending by Category</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <button class="btn btn-ghost btn-sm" onclick="shiftDashMonth(-1)">‹</button>
+              <span id="dash-month-label" style="font-size:13px;font-weight:700;min-width:110px;text-align:center"></span>
+              <button class="btn btn-ghost btn-sm" onclick="shiftDashMonth(1)">›</button>
+            </div>
+          </div>
+          <div id="dash-categories"></div>
+        </div>
+        <div class="card cp" style="margin-bottom:22px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="slbl" style="margin:0">All-Time Spending by Category</div>
+            <span style="font-size:11px;color:var(--muted)" id="dash-chart-label"></span>
+          </div>
+          <div id="dash-cat-chart"></div>
+        </div>
+        <div class="card cp" style="margin-bottom:14px" id="dash-recurring-card">
+          <div class="slbl">🔔 Recurring Payments This Month</div>
+          <div id="dash-recurring"></div>
+        </div>
+        <div class="g2">
+          <div class="card cp">
+            <div class="slbl">Recent Activity</div>
+            <div id="dash-recent"></div>
+          </div>
+          <div class="card cp">
+            <div class="slbl">Budget This Month</div>
+            <div id="dash-budget"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wallets -->
+      <div id="sc-wallets" class="screen">
+        <div class="ph">
+          <div>
+            <div class="ph-title">Wallets</div>
+            <div class="ph-sub">Banks, mobile money &amp; cash</div>
+          </div>
+          <div class="ph-actions">
+            <button class="btn btn-ghost" onclick="openModal('m-transfer')">🔄 Transfer</button>
+            <button class="btn btn-success" onclick="openModal('m-income')">+ Add Money</button>
+            <button class="btn btn-primary" onclick="openWalletModal()">+ Add Wallet</button>
+          </div>
+        </div>
+        <div class="g3" id="wallets-grid"></div>
+        <div class="slbl" style="margin-top:24px">Income History</div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table id="t-income">
+              <thead><tr><th>Date</th><th>Source</th><th>Wallet</th><th>Amount</th><th>Notes</th><th></th></tr></thead>
+              <tbody id="tb-income"></tbody>
+            </table>
+          </div>
+          <div id="income-empty" class="empty" style="display:none">
+            <div class="empty-icon">💰</div>
+            <div class="empty-title">No income recorded yet</div>
+            <div>Use "+ Add Money" to record income</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transfers -->
+      <div id="sc-transfers" class="screen">
+        <div class="ph">
+          <div>
+            <div class="ph-title">Transfers</div>
+            <div class="ph-sub">Money moved between wallets</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('m-transfer')">+ New Transfer</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table id="t-transfers">
+              <thead><tr><th>Date</th><th>From</th><th>To</th><th>Amount</th><th>Charges</th><th>Note</th><th></th></tr></thead>
+              <tbody id="tb-transfers"></tbody>
+            </table>
+          </div>
+          <div id="transfers-empty" class="empty" style="display:none">
+            <div class="empty-icon">🔄</div>
+            <div class="empty-title">No transfers yet</div>
+            <div>Record a movement between wallets</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expenses -->
+      <div id="sc-expenses" class="screen">
+        <div class="ph">
+          <div>
+            <div class="ph-title">Expenses</div>
+            <div class="ph-sub">Daily spending tracker</div>
+          </div>
+          <div class="ph-actions">
+            <button class="btn btn-ghost" onclick="openModal('m-templates')">Templates</button>
+            <button class="btn btn-primary" onclick="openExpenseModal()">+ Add Expense</button>
+          </div>
+        </div>
+        <div class="card cp" style="margin-bottom:14px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label class="lbl" style="margin:0;white-space:nowrap">Month:</label>
+            <input type="month" id="exp-month" class="fc" style="width:150px" onchange="renderExpenses()">
+          </div>
+          <div id="cat-chips" class="chips" style="flex:1"></div>
+        </div>
+        <div id="exp-summary"></div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table id="t-expenses">
+              <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Wallet</th><th>Amount</th><th>Charges</th><th></th></tr></thead>
+              <tbody id="tb-expenses"></tbody>
+            </table>
+          </div>
+          <div id="expenses-empty" class="empty" style="display:none">
+            <div class="empty-icon">💸</div>
+            <div class="empty-title">No expenses for this period</div>
+            <div>Add your first expense to start tracking</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Investments -->
+      <div id="sc-investments" class="screen">
+        <div class="ph">
+          <div>
+            <div class="ph-title">Investments</div>
+            <div class="ph-sub">Portfolio tracker</div>
+          </div>
+          <div class="ph-actions">
+            <button class="btn btn-ghost" onclick="openModal('m-dividend')">+ Dividend</button>
+            <button class="btn btn-primary" onclick="openModal('m-investment')">+ Add Investment</button>
+          </div>
+        </div>
+
+        <!-- Holdings (aggregated) -->
+        <div class="slbl">Holdings</div>
+        <div class="g3" id="holdings-grid" style="margin-bottom:24px"></div>
+
+        <!-- Transaction history -->
+        <div class="section-sep">
+          <div class="slbl" style="margin:0">Transaction History</div>
+        </div>
+        <div class="card" style="margin-bottom:24px">
+          <div class="tbl-wrap">
+            <table id="t-inv-hist">
+              <thead><tr><th>Date</th><th>Asset</th><th>Type</th><th>Qty</th><th>Price/Unit</th><th>Fees</th><th>Total</th><th>Wallet</th><th></th></tr></thead>
+              <tbody id="tb-inv-hist"></tbody>
+            </table>
+          </div>
+          <div id="inv-hist-empty" class="empty" style="display:none">
+            <div class="empty-icon">📈</div>
+            <div class="empty-title">No investments yet</div>
+            <div>Start tracking your portfolio</div>
+          </div>
+        </div>
+
+        <!-- Dividends -->
+        <div class="section-sep">
+          <div class="slbl" style="margin:0">Dividends Received</div>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table id="t-dividends">
+              <thead><tr><th>Date</th><th>Asset / Fund</th><th>Amount</th><th>Wallet Credited</th><th></th></tr></thead>
+              <tbody id="tb-dividends"></tbody>
+            </table>
+          </div>
+          <div id="dividends-empty" class="empty" style="display:none">
+            <div class="empty-icon">💵</div>
+            <div class="empty-title">No dividends recorded</div>
+            <div>Add dividend income from your investments</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Debts & Loans -->
+      <div id="sc-debts" class="screen">
+        <div class="ph">
+          <div>
+            <div class="ph-title">Debts &amp; Loans</div>
+            <div class="ph-sub">Money you lent or borrowed</div>
+          </div>
+          <button class="btn btn-primary" onclick="openDebtModal()">+ Record</button>
+        </div>
+
+        <div class="slbl">Outstanding</div>
+        <div class="card" style="margin-bottom:24px">
+          <div class="tbl-wrap">
+            <table id="t-debts-out">
+              <thead><tr><th>Type</th><th>Person</th><th>Amount</th><th>Date</th><th>Due</th><th>Notes</th><th></th></tr></thead>
+              <tbody id="tb-debts-out"></tbody>
+            </table>
+          </div>
+          <div id="debts-out-empty" class="empty" style="display:none">
+            <div class="empty-icon">🤝</div>
+            <div class="empty-title">No outstanding debts</div>
+            <div>Record money you lent or borrowed</div>
+          </div>
+        </div>
+
+        <div class="slbl">Settled History</div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table id="t-debts-settled">
+              <thead><tr><th>Type</th><th>Person</th><th>Amount</th><th>Lent/Borrowed</th><th>Settled</th><th>Notes</th></tr></thead>
+              <tbody id="tb-debts-settled"></tbody>
+            </table>
+          </div>
+          <div id="debts-settled-empty" class="empty" style="display:none">
+            <div class="empty-icon">✅</div>
+            <div class="empty-title">No settled records yet</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collections -->
+      <div id="sc-collections" class="screen">
+        <div class="ph">
+          <div>
+            <div class="ph-title">Collections</div>
+            <div class="ph-sub">Group money pools — funerals, events, trips</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('m-new-col')">+ New Collection</button>
+        </div>
+        <div class="slbl">Active</div>
+        <div class="g2" id="col-active" style="margin-bottom:24px"></div>
+        <div class="slbl">Closed</div>
+        <div class="g2" id="col-closed"></div>
+      </div>
+
+      <!-- Budget -->
+      <div id="sc-budget" class="screen">
+        <div class="ph">
+          <div>
+            <div class="ph-title">Budget</div>
+            <div class="ph-sub">Monthly spending limits per category</div>
+          </div>
+          <div class="ph-actions">
+            <button class="btn btn-ghost" onclick="openModal('m-recurring')">+ Recurring</button>
+            <button class="btn btn-primary" onclick="openModal('m-budget')">+ Set Budget</button>
+          </div>
+        </div>
+        <div class="g2" id="budget-list"></div>
+        <div class="slbl" style="margin-top:24px">Recurring Payments</div>
+        <div class="g2" id="recurring-list"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Mobile bottom nav (6 items) -->
+  <nav class="bottom-nav">
+    <div class="bn-inner">
+      <div class="bn-item active" onclick="go('dashboard')"><span class="bni">🏠</span>Home</div>
+      <div class="bn-item" onclick="go('wallets')"><span class="bni">💳</span>Wallets</div>
+      <div class="bn-item" onclick="go('expenses')"><span class="bni">💸</span>Expenses</div>
+      <div class="bn-item" onclick="go('collections')"><span class="bni">🫙</span>Collect</div>
+      <div class="bn-item" onclick="go('investments')"><span class="bni">📈</span>Invest</div>
+      <div class="bn-item" onclick="go('budget')"><span class="bni">📊</span>Budget</div>
+    </div>
+  </nav>
+</div>
+
+<!-- ══════════════ MODALS ══════════════ -->
+
+<!-- Wallet -->
+<div class="overlay" id="m-wallet">
+  <div class="modal">
+    <div class="mh">
+      <div class="mh-title" id="m-wallet-title">Add Wallet</div>
+      <button class="m-close" onclick="closeModal('m-wallet')">×</button>
+    </div>
+    <div class="mb">
+      <input type="hidden" id="w-id">
+      <div class="fg">
+        <label class="lbl">Entity Type</label>
+        <select class="fc" id="w-type">
+          <option value="bank">🏦 Bank</option>
+          <option value="mobile_money">📱 Mobile Money</option>
+          <option value="cash">💵 Cash</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Entity Name</label>
+        <input type="text" class="fc" id="w-entity" placeholder="e.g. I&M Bank, MTN MoMo, Equity Bank">
+      </div>
+      <div class="fg">
+        <label class="lbl">Nickname <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <input type="text" class="fc" id="w-name" placeholder="e.g. Main Savings, Business Account">
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Currency</label>
+          <select class="fc" id="w-currency">
+            <option value="RWF">RWF — Rwandan Franc</option>
+            <option value="TZS">TZS — Tanzanian Shilling</option>
+            <option value="USD">USD — US Dollar</option>
+            <option value="EUR">EUR — Euro</option>
+            <option value="KES">KES — Kenyan Shilling</option>
+            <option value="UGX">UGX — Ugandan Shilling</option>
+            <option value="GBP">GBP — British Pound</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="lbl">Current Balance</label>
+          <input type="number" class="fc" id="w-balance" placeholder="0" min="0">
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-wallet')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveWallet()">Save Wallet</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transfer -->
+<div class="overlay" id="m-transfer">
+  <div class="modal">
+    <div class="mh">
+      <div class="mh-title">New Transfer</div>
+      <button class="m-close" onclick="closeModal('m-transfer')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">From Wallet</label>
+          <select class="fc" id="tr-from"></select>
+        </div>
+        <div class="fg">
+          <label class="lbl">To Wallet</label>
+          <select class="fc" id="tr-to"></select>
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Amount</label>
+          <input type="number" class="fc" id="tr-amount" placeholder="0" min="0">
+        </div>
+        <div class="fg">
+          <label class="lbl">Transfer Charges</label>
+          <input type="number" class="fc" id="tr-charges" placeholder="0" min="0" value="0">
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Date</label>
+          <input type="date" class="fc" id="tr-date">
+        </div>
+        <div class="fg">
+          <label class="lbl">Note <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <input type="text" class="fc" id="tr-note" placeholder="Reason…">
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-transfer')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTransfer()">Confirm Transfer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Expense -->
+<div class="overlay" id="m-expense">
+  <div class="modal">
+    <div class="mh">
+      <div class="mh-title">Add Expense</div>
+      <button class="m-close" onclick="closeModal('m-expense')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label class="lbl">Quick-fill from template</label>
+        <select class="fc" id="e-template" onchange="fillTemplate()">
+          <option value="">— or fill manually below —</option>
+        </select>
+      </div>
+      <hr class="m-divider">
+      <div class="fg">
+        <label class="lbl">Description</label>
+        <input type="text" class="fc" id="e-name" placeholder="e.g. Lunch, Transport, Rent">
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Category</label>
+          <input type="text" class="fc" id="e-category" placeholder="e.g. Food, Transport" list="e-cat-list">
+          <datalist id="e-cat-list"></datalist>
+        </div>
+        <div class="fg">
+          <label class="lbl">Amount</label>
+          <input type="number" class="fc" id="e-amount" placeholder="0" min="0">
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Transaction Charges</label>
+          <input type="number" class="fc" id="e-charges" placeholder="0" min="0" value="0">
+        </div>
+        <div class="fg">
+          <label class="lbl">Pay from Wallet</label>
+          <select class="fc" id="e-wallet">
+            <option value="">— Select wallet —</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="lbl">Date</label>
+        <input type="date" class="fc" id="e-date">
+      </div>
+      <div class="fg" style="margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="e-save-tpl"> Save as reusable template
+        </label>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-expense')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveExpense()">Save Expense</button>
+    </div>
+  </div>
+</div>
+
+<!-- Templates manager -->
+<div class="overlay" id="m-templates">
+  <div class="modal" style="max-width:400px">
+    <div class="mh">
+      <div class="mh-title">Expense Templates</div>
+      <button class="m-close" onclick="closeModal('m-templates')">×</button>
+    </div>
+    <div class="mb" style="max-height:60vh;overflow-y:auto">
+      <div id="tpl-list"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-templates')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Template -->
+<div class="overlay" id="m-edit-tpl">
+  <div class="modal" style="max-width:360px">
+    <div class="mh">
+      <div class="mh-title">Edit Template</div>
+      <button class="m-close" onclick="closeModal('m-edit-tpl')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label class="lbl">Template Name</label>
+        <input type="text" class="fc" id="etpl-name" placeholder="e.g. Lunch">
+      </div>
+      <div class="fg">
+        <label class="lbl">Category</label>
+        <input type="text" class="fc" id="etpl-category" placeholder="e.g. Food" list="etpl-cat-list">
+        <datalist id="etpl-cat-list"></datalist>
+      </div>
+      <div class="fg">
+        <label class="lbl">Default Amount</label>
+        <input type="number" class="fc" id="etpl-amount" placeholder="0" min="0">
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-edit-tpl')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditTemplate()">Update Template</button>
+    </div>
+  </div>
+</div>
+
+<!-- Investment -->
+<div class="overlay" id="m-investment">
+  <div class="modal">
+    <div class="mh">
+      <div class="mh-title">Add Investment</div>
+      <button class="m-close" onclick="closeModal('m-investment')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Type</label>
+          <select class="fc" id="inv-type">
+            <option value="stocks">📈 Stocks / Shares</option>
+            <option value="unit_trust">🏦 Unit Trust / Fund</option>
+            <option value="crypto">🪙 Cryptocurrency</option>
+            <option value="bonds">🏛️ Bonds</option>
+            <option value="real_estate">🏠 Real Estate</option>
+            <option value="mutual_fund">💼 Mutual Fund</option>
+            <option value="other">📦 Other</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="lbl">Asset / Fund Name</label>
+          <input type="text" class="fc" id="inv-name" placeholder="e.g. Apple, Umoja Fund, Bitcoin">
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="inv-fixed-mode" onchange="toggleInvMode()">
+          <span><strong>Fixed amount</strong> — no units (e.g. UTT, mutual funds, lump-sum deposits)</span>
+        </label>
+      </div>
+      <!-- Units mode -->
+      <div id="inv-units-section">
+        <div class="fr">
+          <div class="fg">
+            <label class="lbl">Quantity / Units / Shares</label>
+            <input type="number" class="fc" id="inv-qty" placeholder="e.g. 10" min="0" step="any">
+          </div>
+          <div class="fg">
+            <label class="lbl">Price per Unit / NAV</label>
+            <input type="number" class="fc" id="inv-price" placeholder="0" min="0" step="any">
+          </div>
+        </div>
+      </div>
+      <!-- Fixed amount mode -->
+      <div id="inv-amount-section" style="display:none">
+        <div class="fg">
+          <label class="lbl">Amount Invested</label>
+          <input type="number" class="fc" id="inv-total-amount" placeholder="0" min="0" step="any">
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Transaction Fees</label>
+          <input type="number" class="fc" id="inv-fees" placeholder="0" min="0" step="any" value="0">
+        </div>
+        <div class="fg">
+          <label class="lbl">Currency</label>
+          <select class="fc" id="inv-currency">
+            <option value="RWF">RWF</option>
+            <option value="TZS">TZS</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="KES">KES</option>
+            <option value="GBP">GBP</option>
+          </select>
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Funded from Wallet <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <select class="fc" id="inv-wallet">
+            <option value="">— External / None —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="lbl">Broker / Platform <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <input type="text" class="fc" id="inv-broker" placeholder="e.g. UTT, RSE, Binance">
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Date</label>
+          <input type="date" class="fc" id="inv-date">
+        </div>
+        <div class="fg">
+          <label class="lbl">Notes <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <input type="text" class="fc" id="inv-note" placeholder="">
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-investment')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveInvestment()">Save Investment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dividend -->
+<div class="overlay" id="m-dividend">
+  <div class="modal" style="max-width:420px">
+    <div class="mh">
+      <div class="mh-title">Record Dividend</div>
+      <button class="m-close" onclick="closeModal('m-dividend')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label class="lbl">Asset / Fund Name</label>
+        <input type="text" class="fc" id="div-asset" placeholder="e.g. Apple Inc, Umoja Fund" list="div-asset-list">
+        <datalist id="div-asset-list"></datalist>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Dividend Amount</label>
+          <input type="number" class="fc" id="div-amount" placeholder="0" min="0" step="any">
+        </div>
+        <div class="fg">
+          <label class="lbl">Currency</label>
+          <select class="fc" id="div-currency">
+            <option value="RWF">RWF</option>
+            <option value="TZS">TZS</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="KES">KES</option>
+            <option value="GBP">GBP</option>
+          </select>
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Credit to Wallet <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <select class="fc" id="div-wallet">
+            <option value="">— Don't update wallet —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="lbl">Date</label>
+          <input type="date" class="fc" id="div-date">
+        </div>
+      </div>
+      <div class="fg">
+        <label class="lbl">Notes <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <input type="text" class="fc" id="div-notes" placeholder="">
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-dividend')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDividend()">Save Dividend</button>
+    </div>
+  </div>
+</div>
+
+<!-- Debt / Loan -->
+<div class="overlay" id="m-debt">
+  <div class="modal" style="max-width:420px">
+    <div class="mh">
+      <div class="mh-title">Record Debt / Loan</div>
+      <button class="m-close" onclick="closeModal('m-debt')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label class="lbl">Type</label>
+        <select class="fc" id="d-type">
+          <option value="lent">💸 I lent money (someone owes me)</option>
+          <option value="borrowed">🤲 I borrowed money (I owe someone)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Person / Party Name</label>
+        <input type="text" class="fc" id="d-person" placeholder="e.g. John, Amina, Business X">
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Amount</label>
+          <input type="number" class="fc" id="d-amount" placeholder="0" min="0">
+        </div>
+        <div class="fg">
+          <label class="lbl">Currency</label>
+          <select class="fc" id="d-currency">
+            <option value="RWF">RWF</option>
+            <option value="TZS">TZS</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="KES">KES</option>
+            <option value="GBP">GBP</option>
+          </select>
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Wallet <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <select class="fc" id="d-wallet">
+            <option value="">— No wallet update —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="lbl">Date</label>
+          <input type="date" class="fc" id="d-date">
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Due Date <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <input type="date" class="fc" id="d-due">
+        </div>
+        <div class="fg">
+          <label class="lbl">Notes <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <input type="text" class="fc" id="d-notes" placeholder="">
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-debt')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDebt()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Income / Add Money -->
+<div class="overlay" id="m-income">
+  <div class="modal" style="max-width:420px">
+    <div class="mh">
+      <div class="mh-title">Add Money to Wallet</div>
+      <button class="m-close" onclick="closeModal('m-income')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label class="lbl">Wallet to Credit</label>
+        <select class="fc" id="inc-wallet">
+          <option value="">— Select wallet —</option>
+        </select>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Amount</label>
+          <input type="number" class="fc" id="inc-amount" placeholder="0" min="0">
+        </div>
+        <div class="fg">
+          <label class="lbl">Date</label>
+          <input type="date" class="fc" id="inc-date">
+        </div>
+      </div>
+      <div class="fg">
+        <label class="lbl">Source</label>
+        <input type="text" class="fc" id="inc-source" placeholder="e.g. Salary, Client payment, Gift, Interest" list="inc-source-list">
+        <datalist id="inc-source-list">
+          <option value="Salary"><option value="Freelance"><option value="Business income">
+          <option value="Gift"><option value="Interest"><option value="Refund"><option value="Other">
+        </datalist>
+      </div>
+      <div class="fg">
+        <label class="lbl">Notes <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <input type="text" class="fc" id="inc-notes" placeholder="">
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-income')">Cancel</button>
+      <button class="btn btn-success" onclick="saveIncome()">Add Money</button>
+    </div>
+  </div>
+</div>
+
+<!-- Budget -->
+<div class="overlay" id="m-budget">
+  <div class="modal" style="max-width:400px">
+    <div class="mh">
+      <div class="mh-title">Set Budget</div>
+      <button class="m-close" onclick="closeModal('m-budget')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label class="lbl">Category</label>
+        <input type="text" class="fc" id="b-category" placeholder="e.g. Food, Transport" list="b-cat-list">
+        <datalist id="b-cat-list"></datalist>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Monthly Limit</label>
+          <input type="number" class="fc" id="b-limit" placeholder="0" min="0">
+        </div>
+        <div class="fg">
+          <label class="lbl">Currency</label>
+          <select class="fc" id="b-currency">
+            <option value="RWF">RWF</option>
+            <option value="TZS">TZS</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="KES">KES</option>
+            <option value="GBP">GBP</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-budget')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBudget()">Save Budget</button>
+    </div>
+  </div>
+</div>
+
+<!-- Recurring Payment -->
+<div class="overlay" id="m-recurring">
+  <div class="modal" style="max-width:440px">
+    <div class="mh">
+      <div class="mh-title" id="m-recurring-title">New Recurring Payment</div>
+      <button class="m-close" onclick="closeModal('m-recurring')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label class="lbl">Description</label>
+        <input type="text" class="fc" id="rec-desc" placeholder="e.g. Rent, Netflix, Insurance">
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Amount</label>
+          <input type="number" class="fc" id="rec-amount" placeholder="0" min="0">
+        </div>
+        <div class="fg">
+          <label class="lbl">Transaction Charges</label>
+          <input type="number" class="fc" id="rec-charges" placeholder="0" min="0" value="0">
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Category</label>
+          <input type="text" class="fc" id="rec-category" placeholder="e.g. Housing, Utilities" list="rec-cat-list">
+          <datalist id="rec-cat-list"></datalist>
+        </div>
+        <div class="fg">
+          <label class="lbl">Day of Month</label>
+          <input type="number" class="fc" id="rec-day" placeholder="e.g. 15" min="1" max="31">
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Pay from Wallet</label>
+          <select class="fc" id="rec-wallet">
+            <option value="">— Select wallet —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="lbl">Currency</label>
+          <select class="fc" id="rec-currency">
+            <option value="RWF">RWF</option>
+            <option value="TZS">TZS</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="KES">KES</option>
+            <option value="GBP">GBP</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="lbl">Notes <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <input type="text" class="fc" id="rec-notes" placeholder="">
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-recurring')">Cancel</button>
+      <button class="btn btn-primary" id="rec-save-btn" onclick="saveRecurring()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pay Recurring -->
+<div class="overlay" id="m-pay-recurring">
+  <div class="modal" style="max-width:400px">
+    <div class="mh">
+      <div class="mh-title">Pay Recurring Bill</div>
+      <button class="m-close" onclick="closeModal('m-pay-recurring')">×</button>
+    </div>
+    <div class="mb">
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px" id="pr-title"></div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Amount</label>
+          <input type="number" class="fc" id="pr-amount" placeholder="0" min="0">
+        </div>
+        <div class="fg">
+          <label class="lbl">Transaction Charges</label>
+          <input type="number" class="fc" id="pr-charges" placeholder="0" min="0" value="0">
+        </div>
+      </div>
+      <div class="fg">
+        <label class="lbl">Pay from Wallet</label>
+        <select class="fc" id="pr-wallet"></select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Date</label>
+        <input type="date" class="fc" id="pr-date">
+      </div>
+      <input type="hidden" id="pr-rec-id">
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-pay-recurring')">Cancel</button>
+      <button class="btn btn-success" onclick="confirmPayRecurring()">✓ Mark as Paid</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Collection -->
+<div class="overlay" id="m-new-col">
+  <div class="modal" style="max-width:440px">
+    <div class="mh">
+      <div class="mh-title">New Collection</div>
+      <button class="m-close" onclick="closeModal('m-new-col')">×</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label class="lbl">Collection Name</label>
+        <input type="text" class="fc" id="nc-name" placeholder="e.g. Funeral Support, Office Party, Trip Fund">
+      </div>
+      <div class="fg">
+        <label class="lbl">Purpose / Description <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <input type="text" class="fc" id="nc-purpose" placeholder="What is this collection for?">
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Receiving Wallet</label>
+          <select class="fc" id="nc-wallet">
+            <option value="">— Select wallet —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="lbl">Goal Amount <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <input type="number" class="fc" id="nc-goal" placeholder="0" min="0">
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-new-col')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCollection()">Create Collection</button>
+    </div>
+  </div>
+</div>
+
+<!-- Collection Detail -->
+<div class="overlay" id="m-col-detail">
+  <div class="modal" style="max-width:600px">
+    <div class="mh">
+      <div class="mh-title" id="col-detail-title">Collection</div>
+      <button class="m-close" onclick="closeModal('m-col-detail')">×</button>
+    </div>
+    <div class="mb">
+      <div id="col-detail-stats" style="margin-bottom:16px"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="openColEntry('contribution')">+ Contribution</button>
+        <button class="btn btn-danger btn-sm" onclick="openColEntry('own')">+ My Contribution (Expense)</button>
+        <button class="btn btn-ghost btn-sm" onclick="openColEntry('disburse')">→ Disburse</button>
+        <button class="btn btn-ghost btn-sm" id="col-close-btn" onclick="toggleCloseCollection()">Close Collection</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Person / Note</th><th>Amount</th><th></th></tr></thead>
+          <tbody id="col-entries-tbody"></tbody>
+        </table>
+      </div>
+      <div id="col-entries-empty" class="empty" style="display:none">
+        <div class="empty-icon">🫙</div>
+        <div class="empty-title">No entries yet</div>
+        <div>Add contributions or record a disbursement</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Collection Entry (contribution / own / disburse) -->
+<div class="overlay" id="m-col-entry">
+  <div class="modal" style="max-width:400px">
+    <div class="mh">
+      <div class="mh-title" id="col-entry-title">Add Contribution</div>
+      <button class="m-close" onclick="closeModal('m-col-entry')">×</button>
+    </div>
+    <div class="mb">
+      <input type="hidden" id="ce-type">
+      <!-- Contributor name — shown for 'contribution' type -->
+      <div class="fg" id="ce-person-row">
+        <label class="lbl">Contributor Name</label>
+        <input type="text" class="fc" id="ce-person" placeholder="e.g. John Doe">
+      </div>
+      <!-- Wallet — shown for 'own' (expense from) and 'disburse' (deduct from) -->
+      <div class="fg" id="ce-wallet-row" style="display:none">
+        <label class="lbl" id="ce-wallet-lbl">Wallet</label>
+        <select class="fc" id="ce-wallet">
+          <option value="">— Select wallet —</option>
+        </select>
+      </div>
+      <div class="fr">
+        <div class="fg">
+          <label class="lbl">Amount</label>
+          <input type="number" class="fc" id="ce-amount" placeholder="0" min="0">
+        </div>
+        <div class="fg">
+          <label class="lbl">Date</label>
+          <input type="date" class="fc" id="ce-date">
+        </div>
+      </div>
+      <!-- Charges — shown only for disbursements -->
+      <div class="fg" id="ce-charges-row" style="display:none">
+        <label class="lbl">Transaction Charges <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <input type="number" class="fc" id="ce-charges" placeholder="0" min="0" value="0">
+      </div>
+      <div class="fg">
+        <label class="lbl">Notes <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <input type="text" class="fc" id="ce-notes" placeholder="">
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('m-col-entry')">Cancel</button>
+      <button class="btn btn-primary" id="ce-save-btn" onclick="saveColEntry()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- ══════════════ SCRIPTS ══════════════ -->
+<!-- Load in dependency order: constants → state → utils → firebase → nav → features → dashboard -->
+<script src="js/config.js"></script>
+<script src="js/state.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/firebase.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/wallets.js"></script>
+<script src="js/transfers.js"></script>
+<script src="js/expenses.js"></script>
+<script src="js/templates.js"></script>
+<script src="js/investments.js"></script>
+<script src="js/debts.js"></script>
+<script src="js/income.js"></script>
+<script src="js/collections.js"></script>
+<script src="js/budget.js"></script>
+<script src="js/recurring.js"></script>
+<script src="js/dashboard.js"></script>
+
+</body>
+</html>
